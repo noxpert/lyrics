@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lyrics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & tokens ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #fafaf8;
+    --surface:   #ffffff;
+    --border:    #e8e4dd;
+    --muted:     #b0a898;
+    --text:      #1a1814;
+    --text-2:    #6b6055;
+    --accent:    #2d2926;
+    --accent-hi: #c8a96e;
+    --danger:    #c0392b;
+    --radius:    6px;
+    --shadow:    0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.05);
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body:    'DM Sans', system-ui, sans-serif;
+    --font-mono:    'DM Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout shell ───────────────────────────────────────── */
+  #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ── Topbar ─────────────────────────────────────────────── */
+  #topbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 24px;
+    height: 52px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  #topbar .wordmark {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: .01em;
+    margin-right: 8px;
+  }
+  .tab-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background: none;
+    font-family: var(--font-body);
+    font-size: .85rem;
+    font-weight: 500;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--bg); }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  #topbar .spacer { flex: 1; }
+
+  /* ── Pages ──────────────────────────────────────────────── */
+  .page { display: none; flex: 1; overflow: hidden; }
+  .page.active { display: flex; }
+
+  /* ══════════════════════════════════════════════════════════
+     BROWSE PAGE
+  ══════════════════════════════════════════════════════════ */
+  #page-browse { flex-direction: row; }
+
+  /* Sidebar */
+  #sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  #sidebar-head {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #search-wrap {
+    position: relative;
+  }
+  #search-wrap svg {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+  }
+  #search {
+    width: 100%;
+    padding: 8px 10px 8px 34px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font-body);
+    font-size: .875rem;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s;
+  }
+  #search:focus { border-color: var(--accent); }
+  #song-count {
+    font-size: .75rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #song-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  #song-list::-webkit-scrollbar { width: 4px; }
+  #song-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .song-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all .12s;
+    font-size: .9rem;
+    color: var(--text-2);
+    line-height: 1.3;
+    gap: 8px;
+  }
+  .song-item:hover { background: var(--bg); color: var(--text); }
+  .song-item.selected {
+    border-left-color: var(--accent-hi);
+    background: var(--bg);
+    color: var(--text);
+    font-weight: 500;
+  }
+  .song-item .song-num {
+    font-size: .7rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 22px;
+    text-align: right;
+  }
+  #no-results {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: .875rem;
+  }
+
+  /* Lyrics panel */
+  #lyrics-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #lyrics-header {
+    flex-shrink: 0;
+    padding: 24px 48px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  #lyrics-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.4rem, 2.5vw, 2rem);
+    font-weight: 500;
+    color: var(--accent);
+    flex: 1;
+    line-height: 1.2;
+  }
+  #btn-edit-current {
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--surface);
+    font-family: var(--font-body);
+    font-size: .8rem;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  #btn-edit-current:hover { border-color: var(--accent); color: var(--text); }
+
+  #lyrics-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 48px 64px;
+  }
+  #lyrics-body::-webkit-scrollbar { width: 6px; }
+  #lyrics-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  #lyrics-text {
+    font-family: var(--font-display);
+    font-size: clamp(1.1rem, 2.2vw, 1.65rem);
+    line-height: 1.75;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 72ch;
+  }
+
+  #lyrics-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding: 32px;
+  }
+  #lyrics-empty .big-icon { font-size: 3rem; opacity: .3; }
+  #lyrics-empty p { font-size: .95rem; max-width: 28ch; line-height: 1.6; }
+
+  /* ══════════════════════════════════════════════════════════
+     EDITOR PAGE
+  ══════════════════════════════════════════════════════════ */
+  #page-editor {
+    flex-direction: column;
+    background: var(--bg);
+  }
+
+  #editor-toolbar {
+    flex-shrink: 0;
+    padding: 16px 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  #editor-toolbar h2 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--accent);
+    flex: 1;
+  }
+
+  #editor-body {
+    flex: 1;
+    display: flex;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* Song picker column */
+  #editor-picker {
+    width: 240px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  #editor-picker-head {
+    padding: 12px 14px;
+    font-size: .75rem;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #btn-new-song {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: none;
+    font-family: var(--font-body);
+    font-size: .75rem;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  #btn-new-song:hover { border-color: var(--accent); color: var(--text); }
+
+  #editor-song-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+  #editor-song-list::-webkit-scrollbar { width: 4px; }
+  #editor-song-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Form column */
+  #editor-form-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #editor-form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 32px 48px;
+    overflow-y: auto;
+    max-width: 900px;
+  }
+  #editor-form::-webkit-scrollbar { width: 6px; }
+  #editor-form::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+  .field label {
+    font-size: .75rem;
+    font-weight: 500;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .field input, .field textarea {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .15s;
+    resize: none;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field textarea {
+    font-family: var(--font-mono);
+    font-size: .9rem;
+    line-height: 1.7;
+    flex: 1;
+    min-height: 320px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────── */
+  .btn {
+    padding: 9px 22px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-family: var(--font-body);
+    font-size: .875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #3d3530; }
+  .btn-ghost {
+    background: none;
+    color: var(--text-2);
+    border-color: var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+  .btn-danger {
+    background: none;
+    color: var(--danger);
+    border-color: transparent;
+    margin-left: auto;
+  }
+  .btn-danger:hover { background: #fdf0ee; }
+
+  /* ── Toast ───────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 24px;
+    font-size: .875rem;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+    z-index: 999;
+    box-shadow: 0 4px 20px rgba(0,0,0,.18);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { background: var(--danger); }
+
+  /* ── Divider ─────────────────────────────────────────────── */
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Topbar -->
+  <div id="topbar">
+    <span class="wordmark">♪ Lyrics</span>
+    <button class="tab-btn active" id="tab-browse" onclick="showPage('browse')">Browse</button>
+    <button class="tab-btn" id="tab-editor" onclick="showPage('editor')">Edit</button>
+    <div class="spacer"></div>
+  </div>
+
+  <!-- ── BROWSE PAGE ────────────────────────────────────────── -->
+  <div class="page active" id="page-browse">
+    <div id="sidebar">
+      <div id="sidebar-head">
+        <div id="search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="search" type="search" placeholder="Search songs…" oninput="filterSongs(this.value)">
+        </div>
+        <div id="song-count"></div>
+      </div>
+      <div id="song-list"></div>
+    </div>
+
+    <div id="lyrics-panel">
+      <div id="lyrics-empty">
+        <div class="big-icon">♪</div>
+        <p>Select a song from the list to view its lyrics.</p>
+      </div>
+      <div id="lyrics-view" style="display:none; flex-direction:column; height:100%;">
+        <div id="lyrics-header">
+          <div id="lyrics-title"></div>
+          <button id="btn-edit-current" onclick="editCurrentSong()">Edit this song</button>
+        </div>
+        <div id="lyrics-body">
+          <div id="lyrics-text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EDITOR PAGE ────────────────────────────────────────── -->
+  <div class="page" id="page-editor">
+    <div id="editor-toolbar">
+      <h2 id="editor-heading">New Song</h2>
+    </div>
+    <div id="editor-body">
+      <div id="editor-picker">
+        <div id="editor-picker-head">
+          Songs
+          <button id="btn-new-song" onclick="newSong()">+ New</button>
+        </div>
+        <div id="editor-song-list"></div>
+      </div>
+      <div id="editor-form-wrap">
+        <div id="editor-form">
+          <div class="field">
+            <label>Title</label>
+            <input id="f-title" type="text" placeholder="Song title…" autocomplete="off">
+          </div>
+          <div class="field" style="flex:1; display:flex; flex-direction:column;">
+            <label>Lyrics</label>
+            <textarea id="f-lyrics" placeholder="Paste or type lyrics here…" style="flex:1;"></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="saveSong()">Save</button>
+            <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+            <button class="btn btn-danger" id="btn-delete" onclick="deleteSong()" style="display:none;">Delete song</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────
+let allSongs = [];
+let currentSongId = null;   // selected in browse
+let editingSongId = null;   // loaded in editor
+let searchVal = '';
+
+// ── Page switching ────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'editor') renderEditorList();
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 2400);
+}
+
+// ── API helpers ───────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({detail: r.statusText}));
+    throw new Error(e.detail || r.statusText);
+  }
+  return r.status === 204 ? null : r.json();
+}
+
+// ── Load all songs ────────────────────────────────────────────
+async function loadSongs() {
+  allSongs = await api('GET', '/api/songs');
+  renderBrowseList();
+}
+
+// ── Browse: render song list ──────────────────────────────────
+function filterSongs(val) {
+  searchVal = val.toLowerCase();
+  renderBrowseList();
+}
+
+function renderBrowseList() {
+  const filtered = allSongs.filter(s => s.title.toLowerCase().includes(searchVal));
+  const el = document.getElementById('song-list');
+  const countEl = document.getElementById('song-count');
+
+  countEl.textContent = filtered.length === allSongs.length
+    ? `${allSongs.length} song${allSongs.length !== 1 ? 's' : ''}`
+    : `${filtered.length} of ${allSongs.length}`;
+
+  if (filtered.length === 0) {
+    el.innerHTML = `<div id="no-results">${allSongs.length === 0 ? 'No songs yet.<br>Add one in the Edit tab.' : 'No matches.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map((s, i) =>
+    `<div class="song-item${s.id === currentSongId ? ' selected' : ''}"
+          onclick="selectSong(${s.id})">
+       <span class="song-num">${i + 1}</span>
+       ${escHtml(s.title)}
+     </div>`
+  ).join('');
+}
+
+async function selectSong(id) {
+  currentSongId = id;
+  renderBrowseList();
+  const song = await api('GET', `/api/songs/${id}`);
+  document.getElementById('lyrics-title').textContent = song.title;
+  document.getElementById('lyrics-text').textContent = song.lyrics;
+  document.getElementById('lyrics-empty').style.display = 'none';
+  const lv = document.getElementById('lyrics-view');
+  lv.style.display = 'flex';
+}
+
+function editCurrentSong() {
+  if (!currentSongId) return;
+  showPage('editor');
+  loadSongIntoEditor(currentSongId);
+}
+
+// ── Editor ────────────────────────────────────────────────────
+function renderEditorList() {
+  const el = document.getElementById('editor-song-list');
+  if (allSongs.length === 0) {
+    el.innerHTML = `<div style="padding:16px;font-size:.8rem;color:var(--muted);">No songs yet.</div>`;
+    return;
+  }
+  el.innerHTML = allSongs.map(s =>
+    `<div class="song-item${s.id === editingSongId ? ' selected' : ''}"
+          onclick="loadSongIntoEditor(${s.id})">
+       ${escHtml(s.title)}
+     </div>`
+  ).join('');
+}
+
+async function loadSongIntoEditor(id) {
+  const song = await api('GET', `/api/songs/${id}`);
+  editingSongId = id;
+  document.getElementById('f-title').value = song.title;
+  document.getElementById('f-lyrics').value = song.lyrics;
+  document.getElementById('editor-heading').textContent = 'Edit: ' + song.title;
+  document.getElementById('btn-delete').style.display = '';
+  renderEditorList();
+}
+
+function newSong() {
+  editingSongId = null;
+  clearForm();
+  renderEditorList();
+  document.getElementById('f-title').focus();
+}
+
+function clearForm() {
+  editingSongId = null;
+  document.getElementById('f-title').value = '';
+  document.getElementById('f-lyrics').value = '';
+  document.getElementById('editor-heading').textContent = 'New Song';
+  document.getElementById('btn-delete').style.display = 'none';
+  renderEditorList();
+}
+
+async function saveSong() {
+  const title = document.getElementById('f-title').value.trim();
+  const lyrics = document.getElementById('f-lyrics').value;
+  if (!title) { toast('Please enter a title.', true); return; }
+  if (!lyrics.trim()) { toast('Lyrics cannot be empty.', true); return; }
+
+  try {
+    if (editingSongId) {
+      await api('PUT', `/api/songs/${editingSongId}`, { title, lyrics });
+      toast('Song updated.');
+    } else {
+      const created = await api('POST', '/api/songs', { title, lyrics });
+      editingSongId = created.id;
+      document.getElementById('btn-delete').style.display = '';
+      toast('Song saved.');
+    }
+    document.getElementById('editor-heading').textContent = 'Edit: ' + title;
+    await loadSongs();
+    renderEditorList();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function deleteSong() {
+  if (!editingSongId) return;
+  const title = document.getElementById('f-title').value;
+  if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/api/songs/${editingSongId}`);
+    toast('Song deleted.');
+    if (currentSongId === editingSongId) {
+      currentSongId = null;
+      document.getElementById('lyrics-empty').style.display = '';
+      document.getElementById('lyrics-view').style.display = 'none';
+    }
+    clearForm();
+    await loadSongs();
+  } catch(e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+loadSongs();
+</script>
+</body>
+</html>
