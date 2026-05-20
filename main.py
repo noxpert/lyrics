@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import os
 import webbrowser
@@ -8,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 
 # ── Database setup ──────────────────────────────────────────────────────────
@@ -26,23 +27,59 @@ def init_db():
             CREATE TABLE IF NOT EXISTS songs (
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
                 title   TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                lyrics  TEXT NOT NULL,
+                lyrics_json  TEXT NOT NULL,
                 created_at  TEXT DEFAULT (datetime('now')),
                 updated_at  TEXT DEFAULT (datetime('now'))
             )
         """)
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(songs)")}
+        if "lyrics" in cols and "lyrics_json" not in cols:
+            conn.execute("ALTER TABLE songs RENAME COLUMN lyrics TO lyrics_json")
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(songs)")}
+        if "lyrics_json" in cols:
+            for row in conn.execute("SELECT id, lyrics_json FROM songs"):
+                raw = row["lyrics_json"]
+                if not is_json_string_array(raw):
+                    conn.execute(
+                        "UPDATE songs SET lyrics_json = ? WHERE id = ?",
+                        (json.dumps([raw]), row["id"]),
+                    )
         conn.commit()
+
+def is_json_string_array(value: str) -> bool:
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return isinstance(parsed, list) and all(isinstance(item, str) for item in parsed)
 
 # ── Pydantic models ──────────────────────────────────────────────────────────
 
 class SongIn(BaseModel):
     title: str
-    lyrics: str
+    lyrics: list[str]
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v):
+        title = v.strip()
+        if not title:
+            raise ValueError("title cannot be empty")
+        return title
+
+    @field_validator("lyrics")
+    @classmethod
+    def validate_lyrics(cls, v):
+        if not (1 <= len(v) <= 3):
+            raise ValueError("lyrics must have 1, 2, or 3 columns")
+        if not any(s.strip() for s in v):
+            raise ValueError("lyrics cannot be entirely empty")
+        return v
 
 class SongOut(BaseModel):
     id: int
     title: str
-    lyrics: str
+    lyrics: list[str]
 
 # ── App ──────────────────────────────────────────────────────────────────────
 
@@ -74,21 +111,25 @@ def list_songs(q: Optional[str] = None):
 @app.get("/api/songs/{song_id}")
 def get_song(song_id: int):
     conn = get_db()
-    row = conn.execute("SELECT id, title, lyrics FROM songs WHERE id = ?", (song_id,)).fetchone()
+    row = conn.execute("SELECT id, title, lyrics_json FROM songs WHERE id = ?", (song_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Song not found")
-    return dict(row)
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "lyrics": json.loads(row["lyrics_json"]),
+    }
 
 @app.post("/api/songs", status_code=201)
 def create_song(song: SongIn):
     conn = get_db()
     try:
         cur = conn.execute(
-            "INSERT INTO songs (title, lyrics) VALUES (?, ?)",
-            (song.title.strip(), song.lyrics)
+            "INSERT INTO songs (title, lyrics_json) VALUES (?, ?)",
+            (song.title, json.dumps(song.lyrics))
         )
         conn.commit()
-        return {"id": cur.lastrowid, "title": song.title.strip()}
+        return {"id": cur.lastrowid, "title": song.title}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="A song with that title already exists")
 
@@ -100,11 +141,11 @@ def update_song(song_id: int, song: SongIn):
         raise HTTPException(status_code=404, detail="Song not found")
     try:
         conn.execute(
-            "UPDATE songs SET title = ?, lyrics = ?, updated_at = datetime('now') WHERE id = ?",
-            (song.title.strip(), song.lyrics, song_id)
+            "UPDATE songs SET title = ?, lyrics_json = ?, updated_at = datetime('now') WHERE id = ?",
+            (song.title, json.dumps(song.lyrics), song_id)
         )
         conn.commit()
-        return {"id": song_id, "title": song.title.strip()}
+        return {"id": song_id, "title": song.title}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="A song with that title already exists")
 

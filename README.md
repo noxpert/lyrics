@@ -30,7 +30,8 @@ Close the Terminal window that opened, or press **Ctrl-C** in it.
 
 ## Data
 
-All songs are stored in `lyrics.db` (SQLite) in the app folder. Back it up like any file.
+All songs are stored in `lyrics.db` (SQLite) in the app folder. Lyrics are saved
+as JSON arrays of column text. Back it up like any file.
 
 ## Folder structure
 
@@ -52,4 +53,5 @@ lyricsapp/
   - Click **"Edit this song"** to jump to the editor.
 - **Edit tab** — pick an existing song from the left panel, or click **+ New**.
   - Enter/paste lyrics (line breaks are preserved exactly as typed).
+  - Choose 1, 2, or 3 columns; Browse uses the same column layout.
   - Click **Save** to persist, or **Delete song** to remove.

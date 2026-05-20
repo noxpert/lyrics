@@ -22,7 +22,11 @@ Launch Lyrics.command  Bash launcher: creates .venv, installs deps, runs main.py
 requirements.txt     fastapi, uvicorn[standard]
 ```
 
-- **One table**: `songs(id, title UNIQUE COLLATE NOCASE, lyrics, created_at, updated_at)`.
+- **One table**: `songs(id, title UNIQUE COLLATE NOCASE, lyrics_json, created_at, updated_at)`.
+  `lyrics_json` is a JSON-encoded array of column strings. Read it with
+  `json.loads`, write with `json.dumps`. Column count is implicit (array length)
+  and currently capped at 3 by the API validator; raise that cap in
+  `validate_lyrics` to add more.
 - **REST endpoints** under `/api/songs` (list/get/create/update/delete). All other
   paths fall through to `index.html` so the SPA can own routing.
 - **No build step.** No bundler, no framework, no npm. Edit `index.html` directly.
@@ -46,6 +50,8 @@ requirements.txt     fastapi, uvicorn[standard]
 
 - Don't add auth, accounts, or any network egress.
 - Don't add a JS build system or move `index.html` into a framework.
+- Don't bypass `json.loads`/`json.dumps` when touching `lyrics_json` — raw
+  string concatenation will corrupt the data shape.
 - Don't ignore `lyrics.db` casually — it holds the user's data. Never delete or
   overwrite it as part of a change.
 - Don't commit `.venv/`, `.server.pid`, `lyrics.db`, or `.idea/`.

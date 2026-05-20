@@ -224,14 +224,21 @@
   #lyrics-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
   #lyrics-text {
+    display: grid;
+    gap: 32px;
     font-family: var(--font-display);
     font-size: clamp(2.2rem, 3.3vw, 3rem);
     font-weight: 700;
     line-height: 1.75;
     color: var(--text);
+    max-width: 72ch;
+  }
+  .lyrics-col {
     white-space: pre-wrap;
     word-break: break-word;
-    max-width: 72ch;
+  }
+  @media (max-width: 720px) {
+    #lyrics-text { grid-template-columns: 1fr !important; }
   }
 
   #lyrics-empty {
@@ -374,6 +381,39 @@
     flex: 1;
     min-height: 320px;
   }
+  .column-control {
+    display: inline-flex;
+    width: max-content;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .column-btn {
+    min-width: 36px;
+    height: 28px;
+    border: 0;
+    border-right: 1px solid var(--border);
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: .8rem;
+    font-weight: 500;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .column-btn:last-child { border-right: 0; }
+  .column-btn:hover { color: var(--text); background: var(--bg); }
+  .column-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  #f-lyrics-cols {
+    display: flex;
+    gap: 12px;
+    flex: 1;
+  }
+  #f-lyrics-cols textarea { min-width: 0; }
 
   .form-actions {
     display: flex;
@@ -499,9 +539,17 @@
             <label>Title</label>
             <input id="f-title" type="text" placeholder="Song title…" autocomplete="off">
           </div>
+          <div class="field">
+            <label>Columns</label>
+            <div class="column-control">
+              <button class="column-btn active" id="col-btn-1" onclick="setColumnCount(1)">1</button>
+              <button class="column-btn" id="col-btn-2" onclick="setColumnCount(2)">2</button>
+              <button class="column-btn" id="col-btn-3" onclick="setColumnCount(3)">3</button>
+            </div>
+          </div>
           <div class="field" style="flex:1; display:flex; flex-direction:column;">
             <label>Lyrics</label>
-            <textarea id="f-lyrics" placeholder="Paste or type lyrics here…" style="flex:1;"></textarea>
+            <div id="f-lyrics-cols"></div>
           </div>
           <div class="form-actions">
             <button class="btn btn-primary" onclick="saveSong()">Save</button>
@@ -524,6 +572,7 @@ let allSongs = [];
 let currentSongId = null;   // selected in browse
 let editingSongId = null;   // loaded in editor
 let searchVal = '';
+let editingColumnCount = 1;
 
 // ── Page switching ────────────────────────────────────────────
 function showPage(name) {
@@ -595,8 +644,16 @@ async function selectSong(id) {
   currentSongId = id;
   renderBrowseList();
   const song = await api('GET', `/api/songs/${id}`);
+  const lyricsText = document.getElementById('lyrics-text');
   document.getElementById('lyrics-title').textContent = song.title;
-  document.getElementById('lyrics-text').textContent = song.lyrics;
+  lyricsText.style.gridTemplateColumns = `repeat(${song.lyrics.length}, 1fr)`;
+  lyricsText.innerHTML = '';
+  song.lyrics.forEach(text => {
+    const col = document.createElement('div');
+    col.className = 'lyrics-col';
+    col.textContent = text;
+    lyricsText.appendChild(col);
+  });
   document.getElementById('lyrics-empty').style.display = 'none';
   const lv = document.getElementById('lyrics-view');
   lv.style.display = 'flex';
@@ -627,7 +684,8 @@ async function loadSongIntoEditor(id) {
   const song = await api('GET', `/api/songs/${id}`);
   editingSongId = id;
   document.getElementById('f-title').value = song.title;
-  document.getElementById('f-lyrics').value = song.lyrics;
+  editingColumnCount = song.lyrics.length || 1;
+  renderLyricsCols(song.lyrics);
   document.getElementById('editor-heading').textContent = 'Edit: ' + song.title;
   document.getElementById('btn-delete').style.display = '';
   renderEditorList();
@@ -643,7 +701,8 @@ function newSong() {
 function clearForm() {
   editingSongId = null;
   document.getElementById('f-title').value = '';
-  document.getElementById('f-lyrics').value = '';
+  editingColumnCount = 1;
+  renderLyricsCols();
   document.getElementById('editor-heading').textContent = 'New Song';
   document.getElementById('btn-delete').style.display = 'none';
   renderEditorList();
@@ -651,9 +710,9 @@ function clearForm() {
 
 async function saveSong() {
   const title = document.getElementById('f-title').value.trim();
-  const lyrics = document.getElementById('f-lyrics').value;
+  const lyrics = getEditorLyrics();
   if (!title) { toast('Please enter a title.', true); return; }
-  if (!lyrics.trim()) { toast('Lyrics cannot be empty.', true); return; }
+  if (!lyrics.some(text => text.trim())) { toast('Lyrics cannot be empty.', true); return; }
 
   try {
     if (editingSongId) {
@@ -671,6 +730,42 @@ async function saveSong() {
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+function getEditorLyrics() {
+  return Array.from(document.querySelectorAll('#f-lyrics-cols textarea')).map(el => el.value);
+}
+
+function setColumnCount(count) {
+  const current = getEditorLyrics();
+  if (count < current.length && current.slice(count).some(text => text.trim())) {
+    if (!confirm('This will discard text from removed columns. Continue?')) {
+      updateColumnButtons();
+      return;
+    }
+  }
+  editingColumnCount = count;
+  renderLyricsCols(current);
+}
+
+function renderLyricsCols(values) {
+  const container = document.getElementById('f-lyrics-cols');
+  const current = values || getEditorLyrics();
+  container.innerHTML = '';
+  for (let i = 0; i < editingColumnCount; i++) {
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = i === 0 ? 'Paste or type lyrics here…' : `Column ${i + 1} lyrics…`;
+    textarea.value = current[i] || '';
+    textarea.style.flex = '1';
+    container.appendChild(textarea);
+  }
+  updateColumnButtons();
+}
+
+function updateColumnButtons() {
+  document.querySelectorAll('.column-btn').forEach(btn => btn.classList.remove('active'));
+  const active = document.getElementById(`col-btn-${editingColumnCount}`);
+  if (active) active.classList.add('active');
 }
 
 async function deleteSong() {
@@ -698,6 +793,7 @@ function escHtml(s) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────
+renderLyricsCols();
 loadSongs();
 </script>
 </body>
