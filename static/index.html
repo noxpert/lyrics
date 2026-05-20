@@ -178,12 +178,39 @@
 
   /* Lyrics panel */
   #lyrics-panel {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     background: var(--bg);
   }
+
+  #btn-toggle-sidebar {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 5;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text-2);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  #btn-toggle-sidebar:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  #page-browse.sidebar-collapsed #sidebar { display: none; }
 
   #lyrics-header {
     flex-shrink: 0;
@@ -225,20 +252,27 @@
 
   #lyrics-text {
     display: grid;
-    gap: 32px;
+    gap: 0;
     font-family: var(--font-display);
     font-size: clamp(2.2rem, 3.3vw, 3rem);
     font-weight: 700;
     line-height: 1.75;
     color: var(--text);
-    max-width: 72ch;
+    margin: 0 auto;
   }
   .lyrics-col {
     white-space: pre-wrap;
     word-break: break-word;
+    padding: 0 40px;
+  }
+  .lyrics-col:first-child { padding-left: 0; }
+  .lyrics-col:last-child  { padding-right: 0; }
+  .lyrics-col + .lyrics-col {
+    border-left: 1px solid var(--border);
   }
   @media (max-width: 720px) {
-    #lyrics-text { grid-template-columns: 1fr !important; }
+    #lyrics-text { grid-template-columns: 1fr !important; max-width: none !important; }
+    .lyrics-col { padding: 0; border-left: 0 !important; }
   }
 
   #lyrics-empty {
@@ -348,7 +382,6 @@
     gap: 0;
     padding: 32px 48px;
     overflow-y: auto;
-    max-width: 900px;
   }
   #editor-form::-webkit-scrollbar { width: 6px; }
   #editor-form::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -504,6 +537,7 @@
     </div>
 
     <div id="lyrics-panel">
+      <button id="btn-toggle-sidebar" onclick="toggleSidebar()" title="Hide song list" aria-label="Toggle song list">‹</button>
       <div id="lyrics-empty">
         <div class="big-icon">♪</div>
         <p>Select a song from the list to view its lyrics.</p>
@@ -573,6 +607,15 @@ let currentSongId = null;   // selected in browse
 let editingSongId = null;   // loaded in editor
 let searchVal = '';
 let editingColumnCount = 1;
+
+// ── Sidebar toggle ────────────────────────────────────────────
+function toggleSidebar() {
+  const page = document.getElementById('page-browse');
+  const collapsed = page.classList.toggle('sidebar-collapsed');
+  const btn = document.getElementById('btn-toggle-sidebar');
+  btn.textContent = collapsed ? '›' : '‹';
+  btn.title = collapsed ? 'Show song list' : 'Hide song list';
+}
 
 // ── Page switching ────────────────────────────────────────────
 function showPage(name) {
@@ -646,7 +689,8 @@ async function selectSong(id) {
   const song = await api('GET', `/api/songs/${id}`);
   const lyricsText = document.getElementById('lyrics-text');
   document.getElementById('lyrics-title').textContent = song.title;
-  lyricsText.style.gridTemplateColumns = `repeat(${song.lyrics.length}, 1fr)`;
+  lyricsText.style.gridTemplateColumns = `repeat(${song.lyrics.length}, minmax(0, 1fr))`;
+  lyricsText.style.maxWidth = `calc(72ch * ${song.lyrics.length})`;
   lyricsText.innerHTML = '';
   song.lyrics.forEach(text => {
     const col = document.createElement('div');
